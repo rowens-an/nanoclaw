@@ -85,6 +85,17 @@ function buildVolumeMounts(
       });
     }
 
+    // Mount host source directory so container can access local repos.
+    // Configured via HOST_SOURCE_DIR env var; defaults to parent of project root.
+    const hostSourceDir = process.env.HOST_SOURCE_DIR || path.dirname(projectRoot);
+    if (fs.existsSync(hostSourceDir) && hostSourceDir !== projectRoot) {
+      mounts.push({
+        hostPath: hostSourceDir,
+        containerPath: '/workspace/source',
+        readonly: true,
+      });
+    }
+
     // Main also gets its group folder as the working directory
     mounts.push({
       hostPath: groupDir,
@@ -188,8 +199,27 @@ function buildVolumeMounts(
     group.folder,
     'agent-runner-src',
   );
-  if (!fs.existsSync(groupAgentRunnerDir) && fs.existsSync(agentRunnerSrc)) {
-    fs.cpSync(agentRunnerSrc, groupAgentRunnerDir, { recursive: true });
+  if (fs.existsSync(agentRunnerSrc)) {
+    if (!fs.existsSync(groupAgentRunnerDir)) {
+      fs.cpSync(agentRunnerSrc, groupAgentRunnerDir, { recursive: true });
+    } else {
+      // Sync upstream changes (e.g. new hooks, bug fixes) into the per-group
+      // copy, but only for files the agent hasn't customized. A file is
+      // considered customized if its mtime is newer than the upstream copy.
+      for (const file of fs.readdirSync(agentRunnerSrc)) {
+        const srcFile = path.join(agentRunnerSrc, file);
+        const destFile = path.join(groupAgentRunnerDir, file);
+        if (!fs.existsSync(destFile)) {
+          fs.cpSync(srcFile, destFile);
+        } else {
+          const srcMtime = fs.statSync(srcFile).mtimeMs;
+          const destMtime = fs.statSync(destFile).mtimeMs;
+          if (srcMtime > destMtime) {
+            fs.cpSync(srcFile, destFile);
+          }
+        }
+      }
+    }
   }
   mounts.push({
     hostPath: groupAgentRunnerDir,

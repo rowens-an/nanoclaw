@@ -6,7 +6,9 @@
 // gmail
 
 // slack
-import './slack.js';
+
+// teams
+import './teams.js';
 
 // telegram
 

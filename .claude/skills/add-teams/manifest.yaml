@@ -1,0 +1,16 @@
+skill: teams
+version: 1.0.0
+description: "Microsoft Teams integration via Microsoft Graph API with OAuth"
+core_version: 0.1.0
+adds:
+  - src/channels/teams.ts
+  - src/channels/teams.test.ts
+modifies:
+  - src/channels/index.ts
+structured:
+  npm_dependencies:
+    "@azure/msal-node": "^2.16.0"
+    "@microsoft/microsoft-graph-client": "^3.0.7"
+conflicts: []
+depends: []
+test: "npx vitest run src/channels/teams.test.ts"

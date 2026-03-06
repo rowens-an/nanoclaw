@@ -190,6 +190,26 @@ function createPreCompactHook(assistantName?: string): HookCallback {
 // be visible to commands Kit runs.
 const SECRET_ENV_VARS = ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'];
 
+const PROGRESS_INTERVAL_MS = 120_000; // Emit progress every 2 minutes
+const MAX_TURNS = 200; // Safety limit to prevent infinite tool-call loops
+
+function createAcknowledgeHook(): HookCallback {
+  let acknowledged = false;
+  return async (_input, _toolUseId, _context) => {
+    if (!acknowledged) {
+      acknowledged = true;
+      writeOutput({
+        status: 'success',
+        result: 'Working on it...',
+        newSessionId: undefined,
+      });
+    }
+    return {};
+  };
+}
+
+
+
 function createSanitizeBashHook(): HookCallback {
   return async (input, _toolUseId, _context) => {
     const preInput = input as PreToolUseHookInput;
@@ -414,6 +434,10 @@ async function runQuery(
     log(`Additional directories: ${extraDirs.join(', ')}`);
   }
 
+  let lastProgressAt = Date.now();
+  let progressCount = 0;
+  const MAX_PROGRESS_UPDATES = 10; // Stop spamming "Still working..." after this many
+
   for await (const message of query({
     prompt: stream,
     options: {
@@ -435,6 +459,7 @@ async function runQuery(
         'mcp__nanoclaw__*'
       ],
       env: sdkEnv,
+      maxTurns: MAX_TURNS,
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
       settingSources: ['project', 'user'],
@@ -451,7 +476,11 @@ async function runQuery(
       },
       hooks: {
         PreCompact: [{ hooks: [createPreCompactHook(containerInput.assistantName)] }],
-        PreToolUse: [{ matcher: 'Bash', hooks: [createSanitizeBashHook()] }],
+        PreToolUse: [
+          { hooks: [createAcknowledgeHook()] },
+
+          { matcher: 'Bash', hooks: [createSanitizeBashHook()] },
+        ],
       },
     }
   })) {
@@ -471,6 +500,18 @@ async function runQuery(
     if (message.type === 'system' && (message as { subtype?: string }).subtype === 'task_notification') {
       const tn = message as { task_id: string; status: string; summary: string };
       log(`Task notification: task=${tn.task_id} status=${tn.status} summary=${tn.summary}`);
+    }
+
+    // Periodic progress update so the user knows we're still alive
+    const now = Date.now();
+    if (now - lastProgressAt >= PROGRESS_INTERVAL_MS && progressCount < MAX_PROGRESS_UPDATES) {
+      lastProgressAt = now;
+      progressCount++;
+      writeOutput({
+        status: 'success',
+        result: 'Still working...',
+        newSessionId,
+      });
     }
 
     if (message.type === 'result') {
