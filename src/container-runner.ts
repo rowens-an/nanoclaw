@@ -87,7 +87,8 @@ function buildVolumeMounts(
 
     // Mount host source directory so container can access local repos.
     // Configured via HOST_SOURCE_DIR env var; defaults to parent of project root.
-    const hostSourceDir = process.env.HOST_SOURCE_DIR || path.dirname(projectRoot);
+    const hostSourceDir =
+      process.env.HOST_SOURCE_DIR || path.dirname(projectRoot);
     if (fs.existsSync(hostSourceDir) && hostSourceDir !== projectRoot) {
       mounts.push({
         hostPath: hostSourceDir,
@@ -250,6 +251,9 @@ function readSecrets(): Record<string, string> {
     'ANTHROPIC_API_KEY',
     'ANTHROPIC_BASE_URL',
     'ANTHROPIC_AUTH_TOKEN',
+    'JIRA_URL',
+    'JIRA_EMAIL',
+    'JIRA_API_TOKEN',
   ]);
 }
 

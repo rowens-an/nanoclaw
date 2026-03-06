@@ -675,7 +675,11 @@ describe('SlackChannel', () => {
       const channel = new SlackChannel(opts);
       await channel.connect();
 
-      await channel.sendMessage('slack:C0123456789', 'Found 3 results', 'Researcher');
+      await channel.sendMessage(
+        'slack:C0123456789',
+        'Found 3 results',
+        'Researcher',
+      );
 
       expect(currentApp().client.chat.postMessage).toHaveBeenCalledWith({
         channel: 'C0123456789',

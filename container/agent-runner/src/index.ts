@@ -456,7 +456,8 @@ async function runQuery(
         'TeamCreate', 'TeamDelete', 'SendMessage',
         'TodoWrite', 'ToolSearch', 'Skill',
         'NotebookEdit',
-        'mcp__nanoclaw__*'
+        'mcp__nanoclaw__*',
+        'mcp__atlassian__*'
       ],
       env: sdkEnv,
       maxTurns: MAX_TURNS,
@@ -471,6 +472,15 @@ async function runQuery(
             NANOCLAW_CHAT_JID: containerInput.chatJid,
             NANOCLAW_GROUP_FOLDER: containerInput.groupFolder,
             NANOCLAW_IS_MAIN: containerInput.isMain ? '1' : '0',
+          },
+        },
+        atlassian: {
+          command: 'npx',
+          args: ['-y', '@atlassian/mcp-atlassian'],
+          env: {
+            JIRA_URL: containerInput.secrets?.JIRA_URL ?? '',
+            JIRA_EMAIL: containerInput.secrets?.JIRA_EMAIL ?? '',
+            JIRA_API_TOKEN: containerInput.secrets?.JIRA_API_TOKEN ?? '',
           },
         },
       },

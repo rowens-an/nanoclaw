@@ -10,8 +10,8 @@ vi.mock('../env.js', () => ({ readEnvFile: vi.fn(() => ({})) }));
 
 // Mock config
 vi.mock('../config.js', () => ({
-  ASSISTANT_NAME: 'Andy',
-  TRIGGER_PATTERN: /^@Andy\b/i,
+  ASSISTANT_NAME: 'NanoClaude',
+  TRIGGER_PATTERN: /^@NanoClaude\b/i,
 }));
 
 // Mock logger
@@ -83,7 +83,7 @@ function createTestOpts(
       'tg:100200300': {
         name: 'Test Group',
         folder: 'test-group',
-        trigger: '@Andy',
+        trigger: '@NanoClaude',
         added_at: '2024-01-01T00:00:00.000Z',
       },
     })),
@@ -358,7 +358,7 @@ describe('TelegramChannel', () => {
           'tg:100200300': {
             name: 'Private',
             folder: 'private',
-            trigger: '@Andy',
+            trigger: '@NanoClaude',
             added_at: '2024-01-01T00:00:00.000Z',
           },
         })),
@@ -438,7 +438,7 @@ describe('TelegramChannel', () => {
       expect(opts.onMessage).toHaveBeenCalledWith(
         'tg:100200300',
         expect.objectContaining({
-          content: '@Andy @andy_ai_bot what time is it?',
+          content: '@NanoClaude @andy_ai_bot what time is it?',
         }),
       );
     });
@@ -449,16 +449,16 @@ describe('TelegramChannel', () => {
       await channel.connect();
 
       const ctx = createTextCtx({
-        text: '@Andy @andy_ai_bot hello',
+        text: '@NanoClaude @andy_ai_bot hello',
         entities: [{ type: 'mention', offset: 6, length: 12 }],
       });
       await triggerTextMessage(ctx);
 
-      // Should NOT double-prepend — already starts with @Andy
+      // Should NOT double-prepend — already starts with @NanoClaude
       expect(opts.onMessage).toHaveBeenCalledWith(
         'tg:100200300',
         expect.objectContaining({
-          content: '@Andy @andy_ai_bot hello',
+          content: '@NanoClaude @andy_ai_bot hello',
         }),
       );
     });
@@ -497,7 +497,7 @@ describe('TelegramChannel', () => {
       expect(opts.onMessage).toHaveBeenCalledWith(
         'tg:100200300',
         expect.objectContaining({
-          content: '@Andy hey @andy_ai_bot check this',
+          content: '@NanoClaude hey @andy_ai_bot check this',
         }),
       );
     });
@@ -917,7 +917,7 @@ describe('TelegramChannel', () => {
 
       await handler(ctx);
 
-      expect(ctx.reply).toHaveBeenCalledWith('Andy is online.');
+      expect(ctx.reply).toHaveBeenCalledWith('NanoClaude is online.');
     });
   });
 

@@ -57,7 +57,7 @@ export class TeamsChannel implements Channel {
   private deltaTokens = new Map<string, string>();
   private userNameCache = new Map<string, string>();
   private botUserId = '';
-  private outgoingQueue: Array<{ jid: string; text: string }> = [];
+  private outgoingQueue: Array<{ jid: string; text: string; sender?: string }> = [];
   private flushing = false;
 
   private opts: TeamsChannelOpts;
@@ -135,7 +135,7 @@ export class TeamsChannel implements Channel {
     this.schedulePoll();
   }
 
-  async sendMessage(jid: string, text: string): Promise<void> {
+  async sendMessage(jid: string, text: string, sender?: string): Promise<void> {
     const parsed = this.parseJid(jid);
     if (!parsed) {
       logger.warn({ jid }, 'Teams: invalid JID format');
@@ -143,7 +143,7 @@ export class TeamsChannel implements Channel {
     }
 
     if (!this.connected || !this.graphClient) {
-      this.outgoingQueue.push({ jid, text });
+      this.outgoingQueue.push({ jid, text, sender });
       logger.info(
         { jid, queueSize: this.outgoingQueue.length },
         'Teams disconnected, message queued',
@@ -151,32 +151,35 @@ export class TeamsChannel implements Channel {
       return;
     }
 
+    // When sender is provided, prefix the message with the role name
+    // (Graph API doesn't support display name overrides like Slack)
+    const content = sender ? `**[${sender}]** ${text}` : text;
+
     try {
-      if (text.length <= MAX_MESSAGE_LENGTH) {
+      const chunks =
+        content.length <= MAX_MESSAGE_LENGTH
+          ? [content]
+          : Array.from(
+              { length: Math.ceil(content.length / MAX_MESSAGE_LENGTH) },
+              (_, i) =>
+                content.slice(
+                  i * MAX_MESSAGE_LENGTH,
+                  (i + 1) * MAX_MESSAGE_LENGTH,
+                ),
+            );
+
+      for (const chunk of chunks) {
         await this.graphClient
           .api(
             `/teams/${parsed.teamId}/channels/${parsed.channelId}/messages`,
           )
           .post({
-            body: { contentType: 'text', content: text },
+            body: { contentType: 'text', content: chunk },
           });
-      } else {
-        for (let i = 0; i < text.length; i += MAX_MESSAGE_LENGTH) {
-          await this.graphClient
-            .api(
-              `/teams/${parsed.teamId}/channels/${parsed.channelId}/messages`,
-            )
-            .post({
-              body: {
-                contentType: 'text',
-                content: text.slice(i, i + MAX_MESSAGE_LENGTH),
-              },
-            });
-        }
       }
-      logger.info({ jid, length: text.length }, 'Teams message sent');
+      logger.info({ jid, length: text.length, sender }, 'Teams message sent');
     } catch (err) {
-      this.outgoingQueue.push({ jid, text });
+      this.outgoingQueue.push({ jid, text, sender });
       logger.warn(
         { jid, err, queueSize: this.outgoingQueue.length },
         'Failed to send Teams message, queued',
@@ -525,11 +528,14 @@ export class TeamsChannel implements Channel {
         const item = this.outgoingQueue.shift()!;
         const parsed = this.parseJid(item.jid);
         if (!parsed) continue;
+        const content = item.sender
+          ? `**[${item.sender}]** ${item.text}`
+          : item.text;
         await this.graphClient
           .api(`/teams/${parsed.teamId}/channels/${parsed.channelId}/messages`)
-          .post({ body: { contentType: 'text', content: item.text } });
+          .post({ body: { contentType: 'text', content } });
         logger.info(
-          { jid: item.jid, length: item.text.length },
+          { jid: item.jid, length: item.text.length, sender: item.sender },
           'Queued Teams message sent',
         );
       }

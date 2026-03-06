@@ -34,7 +34,8 @@ export class SlackChannel implements Channel {
   private app: App;
   private botUserId: string | undefined;
   private connected = false;
-  private outgoingQueue: Array<{ jid: string; text: string; sender?: string }> = [];
+  private outgoingQueue: Array<{ jid: string; text: string; sender?: string }> =
+    [];
   private flushing = false;
   private userNameCache = new Map<string, string>();
 
@@ -176,7 +177,10 @@ export class SlackChannel implements Channel {
           : Array.from(
               { length: Math.ceil(text.length / MAX_MESSAGE_LENGTH) },
               (_, i) =>
-                text.slice(i * MAX_MESSAGE_LENGTH, (i + 1) * MAX_MESSAGE_LENGTH),
+                text.slice(
+                  i * MAX_MESSAGE_LENGTH,
+                  (i + 1) * MAX_MESSAGE_LENGTH,
+                ),
             );
 
       for (const chunk of chunks) {

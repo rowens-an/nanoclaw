@@ -177,7 +177,7 @@ Tell the user:
 
 > Gmail is connected! Send this in your main channel:
 >
-> `@Andy check my recent emails` or `@Andy list my Gmail labels`
+> `@NanoClaude check my recent emails` or `@NanoClaude list my Gmail labels`
 
 ### Test channel mode (Channel mode only)
 
