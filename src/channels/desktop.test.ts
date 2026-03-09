@@ -7,12 +7,16 @@ import { DesktopChannel } from './desktop.js';
 function makeOpts() {
   const messages: Array<{ jid: string; msg: unknown }> = [];
   const metadata: Array<{ jid: string; timestamp: string }> = [];
-  const groups: Record<string, { name: string; folder: string; trigger: string; added_at: string }> = {};
+  const groups: Record<
+    string,
+    { name: string; folder: string; trigger: string; added_at: string }
+  > = {};
 
   return {
     opts: {
       onMessage: (jid: string, msg: unknown) => messages.push({ jid, msg }),
-      onChatMetadata: (jid: string, timestamp: string) => metadata.push({ jid, timestamp }),
+      onChatMetadata: (jid: string, timestamp: string) =>
+        metadata.push({ jid, timestamp }),
       registeredGroups: () => groups,
     },
     messages,
@@ -30,7 +34,13 @@ function httpRequest(
 ): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const req = http.request(
-      { hostname: '127.0.0.1', port, path, method, headers: { Connection: 'close', ...headers } },
+      {
+        hostname: '127.0.0.1',
+        port,
+        path,
+        method,
+        headers: { Connection: 'close', ...headers },
+      },
       (res) => {
         let data = '';
         res.on('data', (chunk) => (data += chunk));
@@ -86,7 +96,12 @@ describe('DesktopChannel', () => {
   });
 
   it('POST /api/groups creates a group', async () => {
-    const res = await httpRequest(port, 'POST', '/api/groups', JSON.stringify({ name: 'Test Project' }));
+    const res = await httpRequest(
+      port,
+      'POST',
+      '/api/groups',
+      JSON.stringify({ name: 'Test Project' }),
+    );
     expect(res.status).toBe(201);
     const data = JSON.parse(res.body);
     expect(data.jid).toBe('desktop:test-project');
@@ -96,28 +111,53 @@ describe('DesktopChannel', () => {
   it('POST /api/groups rejects duplicate', async () => {
     const { opts, groups } = makeOpts();
     await channel.disconnect();
-    groups['desktop:test'] = { name: 'Test', folder: 'desktop-test', trigger: '@NanoClaude', added_at: '' };
+    groups['desktop:test'] = {
+      name: 'Test',
+      folder: 'desktop-test',
+      trigger: '@NanoClaude',
+      added_at: '',
+    };
     channel = new DesktopChannel(opts, port);
     await channel.connect();
 
-    const res = await httpRequest(port, 'POST', '/api/groups', JSON.stringify({ name: 'Test' }));
+    const res = await httpRequest(
+      port,
+      'POST',
+      '/api/groups',
+      JSON.stringify({ name: 'Test' }),
+    );
     expect(res.status).toBe(409);
   });
 
   it('POST /api/groups rejects empty name', async () => {
-    const res = await httpRequest(port, 'POST', '/api/groups', JSON.stringify({ name: '' }));
+    const res = await httpRequest(
+      port,
+      'POST',
+      '/api/groups',
+      JSON.stringify({ name: '' }),
+    );
     expect(res.status).toBe(400);
   });
 
   it('GET /api/groups/:jid/messages returns messages', async () => {
-    const res = await httpRequest(port, 'GET', '/api/groups/desktop:test/messages');
+    const res = await httpRequest(
+      port,
+      'GET',
+      '/api/groups/desktop:test/messages',
+    );
     expect(res.status).toBe(200);
     expect(JSON.parse(res.body)).toEqual([]);
   });
 
   it('sendMessage stores bot message in DB', async () => {
     // Create chat record first (FK constraint)
-    storeChatMetadata('desktop:test', new Date().toISOString(), 'Test', 'desktop', true);
+    storeChatMetadata(
+      'desktop:test',
+      new Date().toISOString(),
+      'Test',
+      'desktop',
+      true,
+    );
     await channel.sendMessage('desktop:test', 'Hello from bot');
     const messages = getAllMessages('desktop:test');
     expect(messages).toHaveLength(1);
