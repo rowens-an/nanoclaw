@@ -1,0 +1,21 @@
+skill: desktop
+version: 1.0.0
+description: "Local macOS desktop channel via HTTP+WebSocket on localhost"
+core_version: 0.1.0
+adds:
+  - src/channels/desktop.ts
+  - src/channels/desktop.test.ts
+modifies:
+  - src/channels/index.ts
+structured:
+  npm_dependencies:
+    "ws": "^8.0.0"
+  npm_dev_dependencies:
+    "@types/ws": "^8.0.0"
+  env_additions:
+    - DESKTOP_ENABLED
+    - DESKTOP_PORT
+    - DESKTOP_AUTH_TOKEN
+conflicts: []
+depends: []
+test: "npx vitest run src/channels/desktop.test.ts"

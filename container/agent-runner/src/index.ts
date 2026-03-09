@@ -381,7 +381,7 @@ async function runQuery(
   containerInput: ContainerInput,
   sdkEnv: Record<string, string | undefined>,
   resumeAt?: string,
-): Promise<{ newSessionId?: string; lastAssistantUuid?: string; closedDuringQuery: boolean }> {
+): Promise<{ newSessionId?: string; lastAssistantUuid?: string; closedDuringQuery: boolean; promptTooLong: boolean }> {
   const stream = new MessageStream();
   stream.push(prompt);
 
@@ -410,6 +410,7 @@ async function runQuery(
   let lastAssistantUuid: string | undefined;
   let messageCount = 0;
   let resultCount = 0;
+  let promptTooLong = false;
 
   // Load global CLAUDE.md as additional system context (shared across all groups)
   const globalClaudeMdPath = '/workspace/global/CLAUDE.md';
@@ -457,7 +458,8 @@ async function runQuery(
         'TodoWrite', 'ToolSearch', 'Skill',
         'NotebookEdit',
         'mcp__nanoclaw__*',
-        'mcp__atlassian__*'
+        'mcp__atlassian__*',
+        'mcp__ms365__*'
       ],
       env: sdkEnv,
       maxTurns: MAX_TURNS,
@@ -475,12 +477,22 @@ async function runQuery(
           },
         },
         atlassian: {
-          command: 'npx',
-          args: ['-y', '@atlassian/mcp-atlassian'],
+          command: 'mcp-atlassian',
+          args: [],
           env: {
-            JIRA_URL: containerInput.secrets?.JIRA_URL ?? '',
-            JIRA_EMAIL: containerInput.secrets?.JIRA_EMAIL ?? '',
-            JIRA_API_TOKEN: containerInput.secrets?.JIRA_API_TOKEN ?? '',
+            ATLASSIAN_BASE_URL: containerInput.secrets?.JIRA_URL ?? '',
+            ATLASSIAN_EMAIL: containerInput.secrets?.JIRA_EMAIL ?? '',
+            ATLASSIAN_API_TOKEN: containerInput.secrets?.JIRA_API_TOKEN ?? '',
+          },
+        },
+        ms365: {
+          command: 'ms-365-mcp-server',
+          args: [],
+          env: {
+            MS365_MCP_CLIENT_ID: containerInput.secrets?.MS365_MCP_CLIENT_ID ?? '',
+            MS365_MCP_CLIENT_SECRET: containerInput.secrets?.MS365_MCP_CLIENT_SECRET ?? '',
+            MS365_MCP_TENANT_ID: containerInput.secrets?.MS365_MCP_TENANT_ID ?? '',
+            MS365_MCP_OAUTH_TOKEN: containerInput.secrets?.MS365_MCP_OAUTH_TOKEN ?? '',
           },
         },
       },
@@ -520,7 +532,10 @@ async function runQuery(
       writeOutput({
         status: 'success',
         result: 'Still working...',
-        newSessionId,
+        // Don't include newSessionId in progress outputs — the session
+        // hasn't proven viable yet. If we persist it and the query later
+        // fails with "prompt too long", the host would resume the broken
+        // session on the next invocation, creating an infinite loop.
       });
     }
 
@@ -528,17 +543,30 @@ async function runQuery(
       resultCount++;
       const textResult = 'result' in message ? (message as { result?: string }).result : null;
       log(`Result #${resultCount}: subtype=${message.subtype}${textResult ? ` text=${textResult.slice(0, 200)}` : ''}`);
-      writeOutput({
-        status: 'success',
-        result: textResult || null,
-        newSessionId
-      });
+
+      // Detect "Prompt is too long" — don't send this to the user,
+      // signal it so the query loop can retry with a fresh session.
+      if (textResult && /prompt is too long/i.test(textResult)) {
+        promptTooLong = true;
+        log('Detected "Prompt is too long" result, will retry with fresh session');
+        ipcPolling = false;
+        // Break out of the for-await loop. This calls the iterator's
+        // return() method for graceful SDK cleanup (stream.end() causes
+        // the SDK subprocess to exit with code 1 instead).
+        break;
+      } else {
+        writeOutput({
+          status: 'success',
+          result: textResult || null,
+          newSessionId
+        });
+      }
     }
   }
 
   ipcPolling = false;
   log(`Query done. Messages: ${messageCount}, results: ${resultCount}, lastAssistantUuid: ${lastAssistantUuid || 'none'}, closedDuringQuery: ${closedDuringQuery}`);
-  return { newSessionId, lastAssistantUuid, closedDuringQuery };
+  return { newSessionId, lastAssistantUuid, closedDuringQuery, promptTooLong };
 }
 
 async function main(): Promise<void> {
@@ -592,7 +620,30 @@ async function main(): Promise<void> {
     while (true) {
       log(`Starting query (session: ${sessionId || 'new'}, resumeAt: ${resumeAt || 'latest'})...`);
 
-      const queryResult = await runQuery(prompt, sessionId, mcpServerPath, containerInput, sdkEnv, resumeAt);
+      let queryResult: { newSessionId?: string; lastAssistantUuid?: string; closedDuringQuery: boolean; promptTooLong: boolean };
+      try {
+        queryResult = await runQuery(prompt, sessionId, mcpServerPath, containerInput, sdkEnv, resumeAt);
+      } catch (queryErr) {
+        const errMsg = queryErr instanceof Error ? queryErr.message : String(queryErr);
+        // "Prompt is too long" means the resumed session transcript exceeded the
+        // context window. Start a fresh session instead of failing.
+        if (sessionId && /prompt is too long/i.test(errMsg)) {
+          log(`Session too long (thrown), starting fresh session (was: ${sessionId})`);
+          sessionId = undefined;
+          resumeAt = undefined;
+          continue;
+        }
+        throw queryErr;
+      }
+
+      // SDK returned "Prompt is too long" as a result — retry with fresh session
+      if (queryResult.promptTooLong && sessionId) {
+        log(`Session too long (result), starting fresh session (was: ${sessionId})`);
+        sessionId = undefined;
+        resumeAt = undefined;
+        continue;
+      }
+
       if (queryResult.newSessionId) {
         sessionId = queryResult.newSessionId;
       }

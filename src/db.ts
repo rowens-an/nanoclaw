@@ -338,6 +338,38 @@ export function getNewMessages(
   return { messages: rows, newTimestamp };
 }
 
+/**
+ * Get all messages for a chat JID, including bot messages.
+ * Used by the desktop channel to serve full conversation history.
+ */
+export function getAllMessages(
+  chatJid: string,
+  limit: number = 200,
+): NewMessage[] {
+  const sql = `
+    SELECT * FROM (
+      SELECT id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message
+      FROM messages
+      WHERE chat_jid = ?
+        AND content != '' AND content IS NOT NULL
+      ORDER BY timestamp DESC
+      LIMIT ?
+    ) ORDER BY timestamp
+  `;
+  return db.prepare(sql).all(chatJid, limit) as NewMessage[];
+}
+
+export function deleteMessagesForChat(chatJid: string): number {
+  const result = db
+    .prepare('DELETE FROM messages WHERE chat_jid = ?')
+    .run(chatJid);
+  return result.changes;
+}
+
+export function deleteSession(groupFolder: string): void {
+  db.prepare('DELETE FROM sessions WHERE group_folder = ?').run(groupFolder);
+}
+
 export function getMessagesSince(
   chatJid: string,
   sinceTimestamp: string,

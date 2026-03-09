@@ -254,6 +254,10 @@ function readSecrets(): Record<string, string> {
     'JIRA_URL',
     'JIRA_EMAIL',
     'JIRA_API_TOKEN',
+    'MS365_MCP_CLIENT_ID',
+    'MS365_MCP_CLIENT_SECRET',
+    'MS365_MCP_TENANT_ID',
+    'MS365_MCP_OAUTH_TOKEN',
   ]);
 }
 
